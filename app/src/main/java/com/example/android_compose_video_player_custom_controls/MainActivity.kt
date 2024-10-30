@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_BUFFERING
@@ -51,6 +52,7 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.example.android_compose_video_player_custom_controls.data.view_model.VideoPlayerViewMode
 import com.example.android_compose_video_player_custom_controls.ui.theme.Android_Compose_Video_Player_Custom_ControlsTheme
 import java.io.File
 
@@ -73,13 +75,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainPlayerScreen(){
+    //http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
     //Declare video source outside
-    var selectedVideoState by rememberSaveable {
-        mutableStateOf<String>("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
-    }
+
+
+
 
     val scrollState = rememberScrollState()
-
 
 
     Column(
@@ -91,7 +93,7 @@ fun MainPlayerScreen(){
     ) {
 //        Spacer(modifier = Modifier.weight(1f) )
 
-        VideoPlayerZone(selectedVideoState)
+        VideoPlayerZone()
 
 
         Text(text = "This is a VIDEO PLAYER!",
@@ -106,28 +108,37 @@ fun MainPlayerScreen(){
 
 @OptIn(UnstableApi::class)
 @Composable
-fun VideoPlayerZone(videoUrl:String){
+fun VideoPlayerZone(){
 
     val context = LocalContext.current
 
+    var didLoadData by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     // Build cache for caching the media
-    val cacheSystem = remember { buildCache(context) }
+//    val cacheSystem = remember { buildCache(context) }
 
-    val videoURl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    //View Model Player
+    val videoViewModel = viewModel {
+        VideoPlayerViewMode(context = context)
+    }
+    //.videoPlayerData.value = VideoPlayerViewModel().videoPlayerData.value.copy(exoPlayer = createExoPlayer(context, cacheSystem, videoUrl), cacheSystem = buildCache(context) )
 
-    val exoPlayer = remember { createExoPlayer(context, cacheSystem, videoURl) }
+//    val exoPlayer = remember { createExoPlayer(context, cacheSystem, videoUrl) }
 
     val buttonText = remember { mutableStateOf("") }
 
-    LaunchedEffect(exoPlayer.playWhenReady) {
-        Log.d("VIDEO_LOG", "IS PLAYING STATUS: ${exoPlayer.playWhenReady}")
-        buttonText.value = if (exoPlayer.playWhenReady){
+    LaunchedEffect(Unit) {
+        Log.d("VIDEO_LOG", "Current Value Of play when ready ${videoViewModel.videoPlayerData.value.exoPlayer!!.playWhenReady}")
+
+        buttonText.value = if (videoViewModel.videoPlayerData.value.exoPlayer?.playWhenReady == true){
             "Pause!"
         }else{
             "Un-Pause"
         }
     }
+
 
     Column(
         verticalArrangement = Arrangement.Center,
@@ -147,7 +158,7 @@ fun VideoPlayerZone(videoUrl:String){
                     )
 
                     //After applying Layout Params, Attach the exo player to the surface view
-                    exoPlayer.setVideoSurfaceView(this)
+                    videoViewModel.videoPlayerData.value.exoPlayer?.setVideoSurfaceView(this)
                 }//Bottom of Factory
             },
             //Modifiers
@@ -162,18 +173,19 @@ fun VideoPlayerZone(videoUrl:String){
         Button(onClick = {
 
             //if video is playing, pause it,
-            //if its not, unapause itt
-            if (exoPlayer.playWhenReady){
+            //if its not, unapause it
+
+            if (videoViewModel.videoPlayerData.value.exoPlayer?.playWhenReady == true){
                 //pause it
-                exoPlayer.pause()
+                videoViewModel.videoPlayerData.value.exoPlayer?.pause()
             }else {
                 //Unpause
-                exoPlayer.play()
+                videoViewModel.videoPlayerData.value.exoPlayer?.play()
             }
 
-            Log.d("Pressed_Button_VIDEO_LOG", "AFTER SETTING VALUE: Pressed Pause/Play Button: ButtonState: ${exoPlayer.playWhenReady}")
+            Log.d("Pressed_Button_VIDEO_LOG", "AFTER SETTING VALUE: Pressed Pause/Play Button: ButtonState: ${videoViewModel.videoPlayerData.value.exoPlayer?.playWhenReady}")
 
-            buttonText.value = if (exoPlayer.playWhenReady){
+            buttonText.value = if (videoViewModel.videoPlayerData.value.exoPlayer?.playWhenReady == true){
                 "Pause!"
             }else{
                 "Un-Pause"
@@ -209,6 +221,8 @@ fun createExoPlayer(context:Context, cache: Cache, videoUrl: String):ExoPlayer {
         val cachedMediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
             .createMediaSource(MediaItem.fromUri(videoUrl))
             .mediaItem
+
+
 //        // Add a media item to play (URL, asset, etc.)
 //        val mediaItem = MediaItem.fromUri(videoUrl)
         setMediaItem(cachedMediaSource)
@@ -227,7 +241,7 @@ fun createExoPlayer(context:Context, cache: Cache, videoUrl: String):ExoPlayer {
 
 //Cache Builder Function
 @OptIn(UnstableApi::class)
-private fun buildCache(context: Context):SimpleCache {
+fun buildCache(context: Context):SimpleCache {
     //Declare the directory the cache will use
     //Required to state the specific cache location on Android
     val cacheDir = File(context.cacheDir, "media")
@@ -251,7 +265,7 @@ private fun buildCache(context: Context):SimpleCache {
 
 
 @OptIn(UnstableApi::class)
-private fun buildDataSourceFactory(context: Context, cache:Cache): DefaultDataSource.Factory {
+fun buildDataSourceFactory(context: Context, cache:Cache): DefaultDataSource.Factory {
     val cacheDataSourceFactory = CacheDataSource.Factory()
         .setCache(cache)//set the cache to the cache source factory
         .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context))
