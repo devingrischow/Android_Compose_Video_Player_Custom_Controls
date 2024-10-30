@@ -74,4 +74,11 @@ dependencies {
     //Video Player Dependencies
     implementation (libs.androidx.media3.exoplayer)
 
+    //Extra Exo Imports
+    //Dash Support:
+    implementation (libs.androidx.media3.exoplayer.dash) // If you need DASH support
+
+    //DataSource OK HTTP
+    implementation (libs.androidx.media3.datasource.okhttp)
+
 }

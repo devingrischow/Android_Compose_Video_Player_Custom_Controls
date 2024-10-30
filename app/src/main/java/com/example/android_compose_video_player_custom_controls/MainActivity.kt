@@ -2,6 +2,7 @@ package com.example.android_compose_video_player_custom_controls
 
 import android.content.Context
 import android.os.Bundle
+import android.provider.MediaStore.Audio.Media
 import android.util.Log
 import android.view.SurfaceView
 import android.view.ViewGroup
@@ -39,9 +40,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Player.STATE_BUFFERING
+import androidx.media3.common.Player.STATE_READY
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.example.android_compose_video_player_custom_controls.ui.theme.Android_Compose_Video_Player_Custom_ControlsTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,11 +110,24 @@ fun VideoPlayerZone(videoUrl:String){
 
     val context = LocalContext.current
 
-    val exoPlayer = remember { createExoPlayer(context) }
 
+    // Build cache for caching the media
+    val cacheSystem = remember { buildCache(context) }
 
+    val videoURl = "https://firebasestorage.googleapis.com/v0/b/easyeats-43b0d.appspot.com/o/Recipe_Steps%2FEasy%20Folded%20Over%20Cheese%20Quesadilla%2FeasyFoldedOverCheeseQuesadilla_Step4.mp4?alt=media&token=cf1a6c2c-2d50-4492-bb6f-57519225b57a"
 
+    val exoPlayer = remember { createExoPlayer(context, cacheSystem, videoURl) }
 
+    val buttonText = remember { mutableStateOf("") }
+
+    LaunchedEffect(exoPlayer.playWhenReady) {
+        Log.d("VIDEO_LOG", "IS PLAYING STATUS: ${exoPlayer.playWhenReady}")
+        buttonText.value = if (exoPlayer.playWhenReady){
+            "Pause!"
+        }else{
+            "Un-Pause"
+        }
+    }
 
     Column(
         verticalArrangement = Arrangement.Center,
@@ -129,16 +153,38 @@ fun VideoPlayerZone(videoUrl:String){
             //Modifiers
             modifier = Modifier
 
-                .aspectRatio(1080f/1920f)
+                .aspectRatio(1080f / 1920f)
                 .fillMaxWidth()
         )
 
         //Pause Button
         //Right Now Disabled
         Button(onClick = {
-            Log.d("Pressed Button", "Pressed")
+
+            //if video is playing, pause it,
+            //if its not, unapause itt
+            if (exoPlayer.playWhenReady){
+                //pause it
+                exoPlayer.pause()
+            }else {
+                //Unpause
+                exoPlayer.play()
+            }
+
+            Log.d("Pressed_Button_VIDEO_LOG", "AFTER SETTING VALUE: Pressed Pause/Play Button: ButtonState: ${exoPlayer.playWhenReady}")
+
+            buttonText.value = if (exoPlayer.playWhenReady){
+                "Pause!"
+            }else{
+                "Un-Pause"
+            }
+
+            Log.d("Pressed_Button_VIDEO_LOG", "Set Text")
+
+
+
         } ) {
-            Text("Button")
+            Text(buttonText.value)
             //Bottom Of Button
         }
 
@@ -150,19 +196,65 @@ fun VideoPlayerZone(videoUrl:String){
 }
 
 
-
-fun createExoPlayer(context:Context):ExoPlayer {
+@OptIn(UnstableApi::class)
+fun createExoPlayer(context:Context, cache: Cache, videoUrl: String):ExoPlayer {
     //Create a new exoPlayer Instance
     return ExoPlayer.Builder(context).build().apply {
-        // Add a media item to play (URL, asset, etc.)
-        val mediaItem = MediaItem.fromUri("https://firebasestorage.googleapis.com/v0/b/easyeats-43b0d.appspot.com/o/Recipe_Steps%2FEasy%20Folded%20Over%20Cheese%20Quesadilla%2FeasyFoldedOverCheeseQuesadilla_Step4.mp4?alt=media&token=cf1a6c2c-2d50-4492-bb6f-57519225b57a")
-        setMediaItem(mediaItem)
+
+        //Set up the MediaSource Cache DataSource
+        val dataSourceFactory = buildDataSourceFactory(context, cache)
+        //Using a Progressive media source, it uses the factory and the data source to introduce the custom cache, when,
+        // if available plays the video from cache, or downloads and plays it and then plays it through cache
+
+        val cachedMediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(videoUrl))
+            .mediaItem
+//        // Add a media item to play (URL, asset, etc.)
+//        val mediaItem = MediaItem.fromUri(videoUrl)
+        setMediaItem(cachedMediaSource)
 
         //set to repeat infinitely mode
         repeatMode = Player.REPEAT_MODE_ALL
+
 
         //prepare and start the playback
         prepare()
         play()
     }
+}
+
+
+
+//Cache Builder Function
+@OptIn(UnstableApi::class)
+private fun buildCache(context: Context):SimpleCache {
+    //Declare the directory the cache will use
+    //Required to state the specific cache location on Android
+    val cacheDir = File(context.cacheDir, "media")
+
+    //2 Constants
+    val KILOBYTESINMEGABYTES = 1024L
+    val BYTESINKILOBYTES = 1024L
+
+    val desiredCacheSizeMegaBytes = 100L
+
+    val cacheSize = desiredCacheSizeMegaBytes * KILOBYTESINMEGABYTES * BYTESINKILOBYTES
+
+    //Declare the Type of Policy to use for cache removal
+    //An evictor policy
+    val evictor = LeastRecentlyUsedCacheEvictor(cacheSize)
+    //Automatically evict the oldest items, not letting size exceed the given megabytes
+
+    return SimpleCache(cacheDir, evictor, StandaloneDatabaseProvider(context))
+
+}
+
+
+@OptIn(UnstableApi::class)
+private fun buildDataSourceFactory(context: Context, cache:Cache): DefaultDataSource.Factory {
+    val cacheDataSourceFactory = CacheDataSource.Factory()
+        .setCache(cache)//set the cache to the cache source factory
+        .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context))
+
+    return DefaultDataSource.Factory(context, cacheDataSourceFactory)
 }
