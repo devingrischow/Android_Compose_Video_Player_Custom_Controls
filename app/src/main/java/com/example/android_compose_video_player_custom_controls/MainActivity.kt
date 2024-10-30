@@ -114,7 +114,7 @@ fun VideoPlayerZone(videoUrl:String){
     // Build cache for caching the media
     val cacheSystem = remember { buildCache(context) }
 
-    val videoURl = "https://firebasestorage.googleapis.com/v0/b/easyeats-43b0d.appspot.com/o/Recipe_Steps%2FEasy%20Folded%20Over%20Cheese%20Quesadilla%2FeasyFoldedOverCheeseQuesadilla_Step4.mp4?alt=media&token=cf1a6c2c-2d50-4492-bb6f-57519225b57a"
+    val videoURl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
     val exoPlayer = remember { createExoPlayer(context, cacheSystem, videoURl) }
 
